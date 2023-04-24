@@ -4,9 +4,10 @@
 #include <vector>
 #include <string>
 
-void Count_sort(std::vector<int> &a, int start, int end) {
+std::vector<std::pair<int,int>> Count_sort(std::vector<int> &a, int start, int end) {
     int i, j, count;
-    std::vector<int> temp(a.size());
+    // std::vector<int> temp(a.size());
+    std::vector<std::pair<int,int>> NewIndex;
     for (i = start; i <= end; i++) {
         count = 0;
         for (j = 0; j < a.size(); j++)
@@ -14,16 +15,15 @@ void Count_sort(std::vector<int> &a, int start, int end) {
                 count++;
             else if (a[j] == a[i] && j < i)
                 count++;
-        temp[count] = a[i];
+        NewIndex.emplace_back(std::make_pair(count, a[i]));
     }
-    for (int i = 0; i<temp.size(); i++)
-        a[i] = temp[i];
+    return NewIndex;
 }
 
 
 void masterInit(std::vector<int> &a,int argc, char *argv[]){
+    int n = 0;
     //if -b flag is passed then use random numbers in range 0-1000 for benchmarking
-    long n;
     if (argc == 2){
         std::cout << "please specify the size of the array to sort" << std::endl;
     } else if (argc ==3) {
@@ -63,7 +63,6 @@ void masterInit(std::vector<int> &a,int argc, char *argv[]){
         }
         else std::cout << "Unable to open file";
     }
-        
 }
 
 void masterSave(std::vector<int> &a){
@@ -95,13 +94,64 @@ int main(int argc, char *argv[]){
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
     //initialize the array and read from file or generate random numbers
-    std::vector<int> a; 
+    std::vector<int> a;
+    long n = 0;
     if (rank == 0){
-        masterInit(a,argc, argv);
+        masterInit(a, argc, argv);
+        // broadcast the size of the array to the slaves
+        n = a.size();
+        MPI_Bcast(&n, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+        // broadcast the array to the slaves
+        MPI_Bcast(&a[0], a.size(), MPI_INT, 0, MPI_COMM_WORLD);
+    } else {
+        MPI_Bcast(&n, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+        a.resize(n);
+        MPI_Bcast(&a[0], a.size(), MPI_INT, 0, MPI_COMM_WORLD);
     }
+
+
     printArray(a);
 
-    Count_sort(a, 1, 4);
+    //split the array into chunks
+    int chunk_size = a.size() / size;
+    int start = rank * chunk_size;
+    int end = start + chunk_size - 1;
+    if (rank == size - 1){
+        end = a.size() - 1;
+    }
+
+    //sort the chunks
+    std::vector<std::pair<int,int>> indexes = Count_sort(a, start, end);
+
+    //print the chunks
+    for (int i = 0; i < indexes.size(); i++){
+        printf("rank: %d, index: %d, value: %d\n", rank, indexes[i].first, indexes[i].second);
+    }
+
+    //send the chunks to the master
+    if (rank != 0){
+        MPI_Send(&indexes[0], indexes.size() * 2, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    }
+
+    //receive the chunks from the slaves and merge them
+    if (rank == 0){
+        for (int i = 1; i < size; i++){
+            std::vector<std::pair<int,int>> temp(chunk_size);
+            MPI_Recv(&temp[0], chunk_size * 2, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            indexes.insert(indexes.end(), temp.begin(), temp.end());
+        }
+    }
+
+
+    //merge the results
+    if(rank == 0){
+        for (int i = 0; i < indexes.size(); i++){
+            a[indexes[i].first] = indexes[i].second;
+        }
+    }
+
+    
+
 
     printArray(a);
 
