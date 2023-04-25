@@ -8,6 +8,7 @@ std::vector<std::pair<int,int>> Count_sort(std::vector<int> &a, int start, int e
     int i, j, count;
     // std::vector<int> temp(a.size());
     std::vector<std::pair<int,int>> NewIndex;
+    NewIndex.reserve(end - start + 1);
     for (i = start; i <= end; i++) {
         count = 0;
         for (j = 0; j < a.size(); j++)
