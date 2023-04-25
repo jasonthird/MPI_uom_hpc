@@ -3,19 +3,31 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include "omp.h"
 
 std::vector<std::pair<int,int>> Count_sort(std::vector<int> &a, int start, int end) {
     int i, j, count;
-    // std::vector<int> temp(a.size());
     std::vector<std::pair<int,int>> NewIndex;
-    for (i = start; i <= end; i++) {
-        count = 0;
-        for (j = 0; j < a.size(); j++)
-            if (a[j] < a[i])
-                count++;
-            else if (a[j] == a[i] && j < i)
-                count++;
-        NewIndex.emplace_back(std::make_pair(count, a[i]));
+    NewIndex.reserve(end - start + 1);
+    #pragma omp parallel private(i, j, count) firstprivate(start, end,a) shared(NewIndex)
+    {
+        int num_threads = omp_get_num_threads();
+        int thread_id = omp_get_thread_num();
+        int chunk_size = (end - start + 1) / num_threads;
+        start = thread_id * chunk_size;
+        end = start + chunk_size - 1;
+        if (thread_id == num_threads - 1){
+            end = end + (end - start + 1) % num_threads;
+        }
+        for (i = start; i <= end; i++) {
+            count = 0;
+            for (j = 0; j < a.size(); j++)
+                if (a[j] < a[i])
+                    count++;
+                else if (a[j] == a[i] && j < i)
+                    count++;
+            NewIndex.emplace_back(std::make_pair(count, a[i]));
+        }
     }
     return NewIndex;
 }
@@ -110,8 +122,6 @@ int main(int argc, char *argv[]){
     }
 
 
-    printArray(a);
-
     //split the array into chunks
     int chunk_size = a.size() / size;
     int start = rank * chunk_size;
@@ -124,9 +134,9 @@ int main(int argc, char *argv[]){
     std::vector<std::pair<int,int>> indexes = Count_sort(a, start, end);
 
     //print the chunks
-    for (int i = 0; i < indexes.size(); i++){
-        printf("rank: %d, index: %d, value: %d\n", rank, indexes[i].first, indexes[i].second);
-    }
+    // for (int i = 0; i < indexes.size(); i++){
+    //     printf("rank: %d, index: %d, value: %d\n", rank, indexes[i].first, indexes[i].second);
+    // }
 
     //send the chunks to the master
     if (rank != 0){
@@ -150,10 +160,6 @@ int main(int argc, char *argv[]){
         }
     }
 
-    
-
-
-    printArray(a);
 
     
 
