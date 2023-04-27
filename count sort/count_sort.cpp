@@ -148,6 +148,7 @@ int main(int argc, char *argv[]){
 
     //merge the results
     if(rank == 0){
+        #pragma omp parallel for shared(a) firstprivate(indexes)
         for (int i = 0; i < indexes.size(); i++){
             a[indexes[i].first] = indexes[i].second;
         }
