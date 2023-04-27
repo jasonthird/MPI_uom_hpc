@@ -70,6 +70,7 @@ void masterInit(std::vector<int> &a,int argc, char *argv[]){
 
 void masterSave(std::vector<int> &a){
     std::ofstream output("output.txt");
+    std::cout<< "saving results to file" << std::endl;
     if (output.is_open()){
         for (int i = 0; i < a.size(); i++){
             output << a[i] << std::endl;
@@ -112,24 +113,13 @@ int main(int argc, char *argv[]){
         MPI_Bcast(&a[0], a.size(), MPI_INT, 0, MPI_COMM_WORLD);
     }
 
-
-    printArray(a);
-
     //split the array into chunks
     int chunk_size = a.size() / size;
     int start = rank * chunk_size;
     int end = start + chunk_size - 1;
-    if (rank == size - 1){
-        end = a.size() - 1;
-    }
 
     //sort the chunks
     std::vector<std::pair<int,int>> indexes = Count_sort(a, start, end);
-
-    //print the chunks
-    for (int i = 0; i < indexes.size(); i++){
-        printf("rank: %d, index: %d, value: %d\n", rank, indexes[i].first, indexes[i].second);
-    }
 
     //send the chunks to the master
     if (rank != 0){
@@ -145,6 +135,20 @@ int main(int argc, char *argv[]){
         }
     }
 
+    //check if there are any elements left and sort them if there are
+    if (rank == 0){
+        if (a.size() % size != 0){
+            int start = a.size() - (a.size() % size);
+            int end = a.size() - 1;
+            std::vector<std::pair<int,int>> temp = Count_sort(a, start, end);
+            //print the vector temp
+            std::cout << "start: "<< start << " end: " << end << std::endl;
+            for (int i = 0; i < temp.size(); i++){
+                std::cout << temp[i].first << " " << temp[i].second << std::endl;
+            }
+            indexes.insert(indexes.end(), temp.begin(), temp.end());
+        }
+    }
 
     //merge the results
     if(rank == 0){
@@ -153,13 +157,6 @@ int main(int argc, char *argv[]){
             a[indexes[i].first] = indexes[i].second;
         }
     }
-
-    
-
-
-    printArray(a);
-
-    
 
     //save results to file
     if (rank == 0){
