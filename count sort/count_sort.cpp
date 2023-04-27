@@ -7,7 +7,6 @@
 
 std::vector<std::pair<int,int>> Count_sort(std::vector<int> &a, int start, int end) {
     int i, j, count;
-    // std::vector<int> temp(a.size());
     std::vector<std::pair<int,int>> NewIndex;
     NewIndex.reserve(end - start + 1);
     #pragma omp parallel for private(i, j, count) shared(a, NewIndex) firstprivate(start, end)
@@ -102,15 +101,15 @@ int main(int argc, char *argv[]){
     long n = 0;
     if (rank == 0){
         masterInit(a, argc, argv);
-        // broadcast the size of the array to the slaves
+        // broadcast the size of the array to slaves
         n = a.size();
         MPI_Bcast(&n, 1, MPI_LONG, 0, MPI_COMM_WORLD);
-        // broadcast the array to the slaves
-        MPI_Bcast(&a[0], a.size(), MPI_INT, 0, MPI_COMM_WORLD);
+        // broadcast the array to slaves
+        MPI_Bcast(a.data(), a.size(), MPI_INT, 0, MPI_COMM_WORLD);
     } else {
         MPI_Bcast(&n, 1, MPI_LONG, 0, MPI_COMM_WORLD);
         a.resize(n);
-        MPI_Bcast(&a[0], a.size(), MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(a.data(), a.size(), MPI_INT, 0, MPI_COMM_WORLD);
     }
 
     //split the array into chunks
@@ -141,11 +140,6 @@ int main(int argc, char *argv[]){
             int start = a.size() - (a.size() % size);
             int end = a.size() - 1;
             std::vector<std::pair<int,int>> temp = Count_sort(a, start, end);
-            //print the vector temp
-            std::cout << "start: "<< start << " end: " << end << std::endl;
-            for (int i = 0; i < temp.size(); i++){
-                std::cout << temp[i].first << " " << temp[i].second << std::endl;
-            }
             indexes.insert(indexes.end(), temp.begin(), temp.end());
         }
     }
@@ -162,7 +156,6 @@ int main(int argc, char *argv[]){
     if (rank == 0){
         masterSave(a);
     }
-    
 
     MPI_Finalize();
     return 0;
