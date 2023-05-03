@@ -67,16 +67,22 @@ int main (int argc, char *argv[]) {
         
     }
 
-    freq = (long*) malloc (sizeof(long)*N);
-    memset(freq, 0, N*sizeof(long));
+
+    long *freq_local;
+    freq_local = (long*) malloc (N*sizeof(long));
+    memset(freq_local, 0, N*sizeof(long));
 
     //count the frequency
 	for (i=0; i<file_size; i++){
-		freq[buffer[i] - base]++;
+		freq_local[buffer[i] - base]++;
 	}
-
-    //reduce the frequency
-    MPI_Reduce(&freq, &freq, N, MPI_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
+    
+    if (rank==0){
+        freq = (long*) malloc (N*sizeof(long));
+        memset(freq, 0, N*sizeof(long));
+    }
+    //reduce the frequency array
+    MPI_Reduce(freq_local, freq, N, MPI_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
 
     //print the frequency
     if (rank==0){
