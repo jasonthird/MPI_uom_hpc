@@ -4,12 +4,23 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <algorithm>
 
 std::vector<std::pair<int,int>> Count_sort(std::vector<int> &a, int start, int end) {
     int i, j, count;
     std::vector<std::pair<int,int>> NewIndex;
-    NewIndex.reserve(end - start + 1);
-    #pragma omp parallel for private(i, j, count) shared(a, NewIndex) firstprivate(start, end)
+    NewIndex.resize(end - start + 1);
+    //fill with zeros
+    std::fill(NewIndex.begin(), NewIndex.end(), std::make_pair(0,0));
+
+    //gives 0 performance boost, only did it for practice, please ignore
+    //https://stackoverflow.com/questions/43168661/openmp-and-reduction-on-stdvector
+    #pragma omp declare reduction(vec_pairs_plus : std::vector<std::pair<int,int>> : \
+    std::transform(omp_out.begin(), omp_out.end(), omp_in.begin(), omp_out.begin(), \
+    [](std::pair<int,int> a, std::pair<int,int> b) { return std::make_pair(a.first + b.first, a.second + b.second); })) \
+    initializer(omp_priv = decltype(omp_orig)(omp_orig.size()))
+
+    #pragma omp parallel for private(i, j, count) shared(a) firstprivate(start, end) reduction(vec_pairs_plus: NewIndex)
     for (i = start; i <= end; i++) {
         count = 0;
         for (j = 0; j < a.size(); j++)
@@ -17,7 +28,8 @@ std::vector<std::pair<int,int>> Count_sort(std::vector<int> &a, int start, int e
                 count++;
             else if (a[j] == a[i] && j < i)
                 count++;
-        NewIndex.emplace_back(std::make_pair(count, a[i]));
+        NewIndex[i - start].first = count;
+        NewIndex[i - start].second = a[i];     
     }
     return NewIndex;
 }
@@ -89,6 +101,15 @@ void printArray(std::vector<int> &a){
     std::cout << std::endl;
 }
 
+bool checkArray(std::vector<int> &a){
+    for (int i = 0; i < a.size() - 1; i++){
+        if (a[i] > a[i+1]){
+            return false;
+        }
+    }
+    return true;
+}
+
 int main(int argc, char *argv[]){
 
     MPI_Init( &argc, &argv );
@@ -152,6 +173,14 @@ int main(int argc, char *argv[]){
         }
     }
 
+    //check if the array is sorted
+    if (rank == 0){
+        if (checkArray(a)){
+            std::cout << "array is sorted" << std::endl;
+        } else {
+            std::cout << "array is not sorted" << std::endl;
+        }
+    }
     //save results to file
     if (rank == 0){
         masterSave(a);
