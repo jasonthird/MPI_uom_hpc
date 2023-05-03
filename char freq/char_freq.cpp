@@ -3,7 +3,6 @@
 #include <vector>
 #include "mpi.h"
 #include <memory>
-#include <algorithm>
 
 #define N 128
 #define base 0
@@ -43,20 +42,39 @@ int main (int argc, char *argv[]) {
         // copy the file into the buffer:
         file.read(bufferFile.data(), file_size);
 
-        MPI_Bcast(&file_size, 1, MPI_LONG, 0, MPI_COMM_WORLD);
-        buffer.resize(file_size / size);
-        // scatter the array
-        MPI_Scatter(bufferFile.data(), file_size / size, MPI_CHAR, buffer.data(), file_size / size, MPI_CHAR, 0,
-                    MPI_COMM_WORLD);
+        // scatter the array using MPI_Scatterv
+        std::vector<int> sendcounts(size);
+        std::vector<int> displs(size);
+        for (int i = 0; i < size; ++i) {
+            sendcounts[i] = file_size / size;
+            displs[i] = i * file_size / size;
+        }
+        if (file_size % size != 0) {
+            sendcounts[size - 1] += file_size % size;
+        }
+        //sent the sendcounts to all the processes
+        for (int i = 1; i < size; ++i){
+            int temp = sendcounts[i];
+            MPI_Send(&temp, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+        }
+        
+        buffer.resize(sendcounts[rank]);
+        MPI_Scatterv(bufferFile.data(), sendcounts.data(), displs.data(), MPI_CHAR, buffer.data(), sendcounts[rank], MPI_CHAR, 0, MPI_COMM_WORLD);
+
     } else {
-        MPI_Bcast(&file_size, 1, MPI_LONG, 0, MPI_COMM_WORLD);
-        buffer.resize(file_size / size);
-        MPI_Scatter(nullptr, file_size / size, MPI_CHAR, buffer.data(), file_size / size, MPI_CHAR, 0, MPI_COMM_WORLD);
+        //receive the sendcounts from the root
+        int sendcounts;
+        MPI_Recv(&sendcounts, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        buffer.resize(sendcounts);
+        MPI_Scatterv(nullptr, nullptr, nullptr, MPI_CHAR, buffer.data(), sendcounts, MPI_CHAR, 0, MPI_COMM_WORLD);
     }
 
-    // count the frequency
-    //cast the frequency local to an array
+
+    //cast the frequency local to an array to use reduction
     long *freq_local_data = freq_local.data();
+    
+    // count the frequency
     #pragma omp parallel for reduction(+:freq_local_data[:N]) firstprivate(buffer)
     for (int i=0; i<buffer.size(); i++){
         freq_local_data[buffer[i] - base]++;
