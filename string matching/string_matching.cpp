@@ -75,16 +75,16 @@ int main (int argc, char *argv[]) {
     //get pattern to search
     std::string pattern;
     pattern = argv[2];
-    // std::cout << "pattern is " << pattern << std::endl;
-    // std::cout << "rank " << rank << " has " << buffer.size() << " characters\n";
 
     //search for the pattern
     std::vector<int> match(buffer.size()-pattern.size()+1, 0);
     int total_matches = 0;
     int i,j;
+    #pragma omp parallel for firstprivate(pattern, buffer) private(i,j) shared(match) reduction(+:total_matches)
     for (j=0; j < buffer.size(); ++j){
         for (i = 0; i < pattern.size() && pattern[i] == buffer[i + j]; ++i);
         if (i >= pattern.size()) {
+                #pragma atomic
         		match[j]++;
          		total_matches++;
         }	
@@ -121,7 +121,7 @@ int main (int argc, char *argv[]) {
 
     //gather the match vector from each slave
     MPI_Gatherv(match.data(), match.size(), MPI_INT, match_all.data(), sendcounts.data(), displs.data(), MPI_INT, 0, MPI_COMM_WORLD);
-    
+
 
     //print the matches
     if (rank == 0){
