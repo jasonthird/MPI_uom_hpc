@@ -9,12 +9,11 @@ def checkIfSorted(array):
 
 if __name__ == '__main__':
     #fill an array with random numbers
-    array = [random.randint(0, 1000) for i in range(1000000)]
+    array = [random.randint(0, 1000) for i in range(2000000)]
 
     #get time
     startTime = time.time()
-    sortedArray = MergeSort.delay(array)
-    a = sortedArray.get()
+    sortedArray = MergeSort.delay(array).get()
     finishTime = time.time()
     print("Time taken: " + str(finishTime - startTime))
-    print("Sorted: " + str(checkIfSorted(a)))
+    print("Sorted: " + str(checkIfSorted(sortedArray)))

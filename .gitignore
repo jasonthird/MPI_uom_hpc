@@ -47,3 +47,5 @@ uftrace.data
 *in.txt
 *out.txt
 
+*__pycache*
+
