@@ -30,8 +30,11 @@ void MergeSort(std::vector<int> &vector) {
     for (int i = middle; i < vector.size(); i++) {
         rightVector[i - middle] = vector[i];
     }
+    #pragma omp task shared(leftVector)
     MergeSort(leftVector);
+    #pragma omp task shared(rightVector)
     MergeSort(rightVector);
+    #pragma omp taskwait
     std::merge(leftVector.begin(), leftVector.end(), rightVector.begin(), rightVector.end(), vector.begin());
 
     //free up memory
@@ -89,8 +92,12 @@ int main(int argc, char *argv[])
     std::vector<int> local_data(sendcounts[rank]);
 
     MPI_Scatterv(data.data(), sendcounts.data(), displs.data(), MPI_INT, local_data.data(), sendcounts[rank], MPI_INT, 0, MPI_COMM_WORLD);
-    MergeSort(local_data);
 
+    #pragma omp parallel shared(local_data)
+    {
+        #pragma omp single
+        MergeSort(local_data);
+    }
     //merging sublists
     std::vector<int> sorted_data;
     if(rank==0){
