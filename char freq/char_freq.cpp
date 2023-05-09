@@ -45,10 +45,13 @@ int main (int argc, char *argv[]) {
         // scatter the array using MPI_Scatterv
         std::vector<int> sendcounts(size);
         std::vector<int> displs(size);
-        for (int i = 0; i < size; ++i) {
+        displs[0] = 0;
+        sendcounts[0] = file_size / size;
+        for (int i = 1; i < size; ++i) {
             sendcounts[i] = file_size / size;
-            displs[i] = i * file_size / size;
+            displs[i] = displs[i-1] + sendcounts[i-1];
         }
+
         if (file_size % size != 0) {
             sendcounts[size - 1] += file_size % size;
         }

@@ -3,6 +3,7 @@
 #include <vector>
 #include "mpi.h"
 #include <memory>
+#include <string>
 
 #define N 128
 #define base 0
@@ -15,7 +16,8 @@ int main (int argc, char *argv[]) {
 
     std::vector<char> buffer;
     std::size_t file_size;
-
+    std::vector<int> sendcounts(size);
+    std::vector<int> displs(size);
     if (rank == 0) {
         std::string filename;
         if (argc != 3) {
@@ -45,14 +47,15 @@ int main (int argc, char *argv[]) {
     
         // scatter the array using MPI_Scatterv
         // send the chunks plus the pattern size to each process
-        std::vector<int> sendcounts(size);
-        std::vector<int> displs(size);
-        for (int i = 0; i < size; ++i) {
+        displs[0] = 0;
+        sendcounts[0] = file_size / size;
+        for (int i = 1; i < size; ++i) {
             sendcounts[i] = file_size / size + pattern_size;
-            displs[i] = i * file_size / size;
+            displs[i] = displs[i-1] + sendcounts[i-1]-pattern_size;
         }
+
         if (file_size % size != 0) {
-            sendcounts[size - 1] += file_size % size + pattern_size;
+            sendcounts[size - 1] += file_size % size - pattern_size;
         }
         //sent the sendcounts to all the processes
         for (int i = 1; i < size; ++i){
@@ -72,12 +75,26 @@ int main (int argc, char *argv[]) {
         MPI_Scatterv(nullptr, nullptr, nullptr, MPI_CHAR, buffer.data(), sendcounts, MPI_CHAR, 0, MPI_COMM_WORLD);
     }
 
+
     //get pattern to search
     std::string pattern;
     pattern = argv[2];
 
+    std::string word;
+
+    //check if the text is split correctly between the processes with a bit extra to account for the pattern size
+    // for (int i = 0; i < pattern.size(); ++i){
+    //     word.push_back(buffer[i]);
+    // }
+    // std::cout << "rank " << rank << " word = " << word << std::endl;
+    // word.clear();
+    // for (int i = buffer.size()-pattern.size(); i < buffer.size(); ++i){
+    //     word.push_back(buffer[i]);
+    // }
+    // std::cout << "rank " << rank << " word = " << word << std::endl;
+
     //search for the pattern
-    std::vector<int> match(buffer.size()-pattern.size()+1, 0);
+    std::vector<int> match(buffer.size()-pattern.size(), 0);
     int total_matches = 0;
     int i,j;
     #pragma omp parallel for firstprivate(pattern, buffer) private(i,j) shared(match) reduction(+:total_matches)
@@ -96,16 +113,8 @@ int main (int argc, char *argv[]) {
     if (rank == 0){
         std::cout << "Total matches: " << total_matches_all << std::endl;
     }
-
-    //construct the match vector
-    std::vector<int> match_all;
-    if (rank == 0){
-        match_all.resize(file_size);
-    }
     
-    //construct the sendcounts from each nice slave and send to master
-    std::vector<int> sendcounts(size);
-    std::vector<int> displs(size);
+    //construct the new sendcounts and displs vectors
     if (rank==0){
         sendcounts[0] = match.size();
         displs[0] = 0;
@@ -120,8 +129,11 @@ int main (int argc, char *argv[]) {
     }
 
     //gather the match vector from each slave
+    std::vector<int> match_all;
+    if (rank == 0){
+        match_all.resize(file_size);
+    }
     MPI_Gatherv(match.data(), match.size(), MPI_INT, match_all.data(), sendcounts.data(), displs.data(), MPI_INT, 0, MPI_COMM_WORLD);
-
 
     //print the matches
     if (rank == 0){
